@@ -30,4 +30,16 @@ export interface PlacementResult {
   confidence: number;
 }
 
-export type ViewState = 'HOME' | 'PLACEMENT_TEST' | 'REGISTER' | 'ABOUT';
+export interface Registrant {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  courseInterest: string;
+  level: string;
+  type: 'ZOOM' | 'IN_PERSON';
+  status: 'PENDING' | 'CONTACTED' | 'ENROLLED';
+  date: string;
+}
+
+export type ViewState = 'HOME' | 'PLACEMENT_TEST' | 'REGISTER' | 'ABOUT' | 'ADMIN';

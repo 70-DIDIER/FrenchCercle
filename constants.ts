@@ -1,4 +1,4 @@
-import { Service, Testimonial, TeamMember } from './types';
+import { Service, Testimonial, TeamMember, Registrant } from './types';
 
 export const SERVICES: Service[] = [
   {
@@ -92,5 +92,41 @@ export const TEAM: TeamMember[] = [
     role: 'Cultural Liaison & Conversation',
     bio: 'Sophie brings language to life through cinema, literature, and art history, making every conversation class an immersive cultural journey.',
     image: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+  }
+];
+
+export const MOCK_REGISTRANTS: Registrant[] = [
+  {
+    id: '101',
+    firstName: 'James',
+    lastName: 'Sullivan',
+    email: 'james.s@example.com',
+    courseInterest: 'French for Business',
+    level: 'B1',
+    type: 'ZOOM',
+    status: 'ENROLLED',
+    date: '2024-03-15'
+  },
+  {
+    id: '102',
+    firstName: 'Maria',
+    lastName: 'Garcia',
+    email: 'm.garcia@example.com',
+    courseInterest: 'General French',
+    level: 'A1',
+    type: 'IN_PERSON',
+    status: 'CONTACTED',
+    date: '2024-03-18'
+  },
+  {
+    id: '103',
+    firstName: 'Robert',
+    lastName: 'Chen',
+    email: 'rob.chen@example.com',
+    courseInterest: 'French for Travel',
+    level: 'A2',
+    type: 'ZOOM',
+    status: 'PENDING',
+    date: '2024-03-20'
   }
 ];

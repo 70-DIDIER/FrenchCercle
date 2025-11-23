@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { ViewState, CEFRLevel } from './types';
-import { SERVICES, LEVELS, TESTIMONIALS, TEAM } from './constants';
+import { ViewState, CEFRLevel, Registrant } from './types';
+import { SERVICES, LEVELS, TESTIMONIALS, TEAM, MOCK_REGISTRANTS } from './constants';
 import { Button } from './components/Button';
 import { PlacementTest } from './components/PlacementTest';
 import { TestimonialCard } from './components/TestimonialCard';
-import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap } from 'lucide-react';
+import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap, Lock, Search, Filter, MoreHorizontal } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('HOME');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<CEFRLevel | null>(null);
   const [registrationType, setRegistrationType] = useState<'ZOOM' | 'IN_PERSON'>('ZOOM');
+  
+  // Admin State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [registrants, setRegistrants] = useState<Registrant[]>(MOCK_REGISTRANTS);
 
   const handlePlacementComplete = (level: string) => {
     // Cast strict string to CEFRLevel for type safety in a real app, assuming AI returns valid enum
@@ -18,6 +23,15 @@ const App: React.FC = () => {
         setSelectedLevel(level as CEFRLevel);
     }
     setView('REGISTER');
+  };
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPassword === 'admin123') {
+      setIsAdminAuthenticated(true);
+    } else {
+      alert('Incorrect Password');
+    }
   };
 
   const scrollToSection = (id: string) => {
@@ -91,13 +105,11 @@ const App: React.FC = () => {
           {/* Hero Section */}
           <section className="relative h-[85vh] flex items-center justify-center overflow-hidden">
             <div className="absolute inset-0 z-0">
-               {/* Updated image to show students in class */}
                <img 
                  src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80" 
                  alt="Students learning in a classroom" 
                  className="w-full h-full object-cover"
                />
-               {/* Lighter gradient for better visibility */}
                <div className="absolute inset-0 bg-gradient-to-r from-french-blue/80 to-french-blue/20 mix-blend-multiply"></div>
                <div className="absolute inset-0 bg-black/10"></div>
             </div>
@@ -352,67 +364,222 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="bg-french-blue text-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
-            <div>
-              <div className="flex items-center mb-6">
-                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-french-blue font-serif font-bold text-lg mr-3">
-                    F
-                 </div>
-                 <span className="font-serif text-2xl font-bold tracking-tight">
-                    French<span className="text-french-red">Cercle</span>
-                 </span>
+      {/* Admin View */}
+      {view === 'ADMIN' && (
+        <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
+          {!isAdminAuthenticated ? (
+            <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-md animate-fade-in border border-gray-100">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-french-blue rounded-full flex items-center justify-center text-white mx-auto mb-4">
+                  <Lock className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Admin Portal</h2>
+                <p className="text-gray-500 text-sm">Restricted access for FrenchCercle staff</p>
               </div>
-              <p className="text-blue-200 text-sm leading-relaxed max-w-xs">
-                The premier destination for American francophiles. 
-                Bridging cultures through language excellence since 2024.
-              </p>
+              <form onSubmit={handleAdminLogin}>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                  <input 
+                    type="password" 
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent"
+                    placeholder="Enter admin password"
+                  />
+                  <p className="text-xs text-gray-400 mt-2 italic">Hint: admin123</p>
+                </div>
+                <Button type="submit" className="w-full">Access Dashboard</Button>
+                <button type="button" onClick={() => setView('HOME')} className="w-full mt-4 text-sm text-gray-500 hover:text-french-blue">Return Home</button>
+              </form>
             </div>
-            
-            <div>
-              <h3 className="font-bold text-lg mb-6 text-french-gold font-serif">Contact Us</h3>
-              <ul className="space-y-4 text-blue-100">
-                <li className="flex items-start group">
-                    <MapPin className="w-5 h-5 mr-3 mt-0.5 group-hover:text-french-red transition-colors" /> 
-                    <span>123 Education Ave,<br/>New York, NY 10001</span>
-                </li>
-                <li className="flex items-center group">
-                    <Phone className="w-5 h-5 mr-3 group-hover:text-french-red transition-colors" /> 
-                    <span>+1 (555) 123-4567</span>
-                </li>
-                <li className="flex items-center group">
-                    <Mail className="w-5 h-5 mr-3 group-hover:text-french-red transition-colors" /> 
-                    <span>bonjour@frenchcercle.com</span>
-                </li>
-              </ul>
-            </div>
+          ) : (
+            <div className="w-full max-w-6xl animate-fade-in h-[85vh] flex flex-col">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h2 className="text-3xl font-serif font-bold text-french-blue">Dashboard</h2>
+                  <p className="text-gray-600">Overview of student registrations</p>
+                </div>
+                <div className="flex space-x-3">
+                   <Button variant="outline" onClick={() => { setIsAdminAuthenticated(false); setView('HOME'); }}>Logout</Button>
+                </div>
+              </div>
 
-            <div>
-               <h3 className="font-bold text-lg mb-6 text-french-gold font-serif">Social</h3>
-               <div className="flex space-x-4">
-                 <a href="#" className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-french-red transition-all duration-300 hover:-translate-y-1"><Globe className="w-5 h-5" /></a>
-                 <a href="#" className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-french-red transition-all duration-300 hover:-translate-y-1"><Users className="w-5 h-5" /></a>
-               </div>
-               <div className="mt-8">
-                   <p className="text-blue-300 text-sm mb-2">Subscribe to our newsletter</p>
-                   <div className="flex">
-                       <input type="email" placeholder="Email" className="bg-blue-900/50 border-none rounded-l-md px-4 py-2 w-full text-sm text-white focus:ring-1 focus:ring-french-gold" />
-                       <button className="bg-french-gold text-french-blue px-4 py-2 rounded-r-md text-sm font-bold hover:bg-white transition-colors">OK</button>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                   <div className="flex justify-between items-start mb-4">
+                      <div className="p-2 bg-blue-50 rounded-lg"><Users className="w-6 h-6 text-french-blue" /></div>
+                      <span className="text-green-600 text-xs font-bold">+12%</span>
                    </div>
-               </div>
+                   <h3 className="text-3xl font-bold text-gray-900">{registrants.length}</h3>
+                   <p className="text-sm text-gray-500">Total Students</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                   <div className="flex justify-between items-start mb-4">
+                      <div className="p-2 bg-purple-50 rounded-lg"><Video className="w-6 h-6 text-purple-600" /></div>
+                   </div>
+                   <h3 className="text-3xl font-bold text-gray-900">{registrants.filter(r => r.type === 'ZOOM').length}</h3>
+                   <p className="text-sm text-gray-500">Online Learners</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                   <div className="flex justify-between items-start mb-4">
+                      <div className="p-2 bg-orange-50 rounded-lg"><GraduationCap className="w-6 h-6 text-orange-600" /></div>
+                   </div>
+                   <h3 className="text-3xl font-bold text-gray-900">{registrants.filter(r => r.status === 'ENROLLED').length}</h3>
+                   <p className="text-sm text-gray-500">Active Enrollments</p>
+                </div>
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                   <div className="flex justify-between items-start mb-4">
+                      <div className="p-2 bg-red-50 rounded-lg"><Mail className="w-6 h-6 text-french-red" /></div>
+                   </div>
+                   <h3 className="text-3xl font-bold text-gray-900">{registrants.filter(r => r.status === 'PENDING').length}</h3>
+                   <p className="text-sm text-gray-500">Pending Actions</p>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                   <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input type="text" placeholder="Search students..." className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-french-blue" />
+                   </div>
+                   <div className="flex space-x-2">
+                      <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                         <Filter className="w-4 h-4 mr-2" /> Filter
+                      </button>
+                      <Button size="sm">Add Student</Button>
+                   </div>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider font-semibold sticky top-0">
+                      <tr>
+                        <th className="px-6 py-4">Student Name</th>
+                        <th className="px-6 py-4">Course</th>
+                        <th className="px-6 py-4">Level</th>
+                        <th className="px-6 py-4">Type</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">Date</th>
+                        <th className="px-6 py-4"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {registrants.map((student) => (
+                        <tr key={student.id} className="hover:bg-blue-50/30 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 rounded-full bg-french-blue/10 text-french-blue flex items-center justify-center font-bold text-xs mr-3">
+                                {student.firstName[0]}{student.lastName[0]}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900">{student.firstName} {student.lastName}</div>
+                                <div className="text-xs text-gray-500">{student.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-700">{student.courseInterest}</td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              {student.level}
+                            </span>
+                          </td>
+                           <td className="px-6 py-4">
+                            <span className={`inline-flex items-center text-xs font-medium ${student.type === 'ZOOM' ? 'text-blue-600' : 'text-purple-600'}`}>
+                              {student.type === 'ZOOM' ? <Video className="w-3 h-3 mr-1" /> : <Users className="w-3 h-3 mr-1" />}
+                              {student.type === 'ZOOM' ? 'Online' : 'In-Person'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                              student.status === 'ENROLLED' ? 'bg-green-50 text-green-700 border-green-200' : 
+                              student.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                              'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}>
+                              {student.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">{student.date}</td>
+                          <td className="px-6 py-4 text-right">
+                             <button className="text-gray-400 hover:text-french-blue"><MoreHorizontal className="w-5 h-5" /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="border-t border-white/10 pt-8 text-center text-blue-300 text-sm flex flex-col md:flex-row justify-between items-center">
-            <p>&copy; {new Date().getFullYear()} FrenchCercle. All rights reserved.</p>
-            <div className="flex space-x-6 mt-4 md:mt-0">
-                <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-                <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-            </div>
-          </div>
+          )}
         </div>
-      </footer>
+      )}
+
+      {/* Footer */}
+      {!isAdminAuthenticated && view !== 'ADMIN' && (
+        <footer className="bg-french-blue text-white py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+              <div>
+                <div className="flex items-center mb-6">
+                   <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-french-blue font-serif font-bold text-lg mr-3">
+                      F
+                   </div>
+                   <span className="font-serif text-2xl font-bold tracking-tight">
+                      French<span className="text-french-red">Cercle</span>
+                   </span>
+                </div>
+                <p className="text-blue-200 text-sm leading-relaxed max-w-xs">
+                  The premier destination for American francophiles. 
+                  Bridging cultures through language excellence since 2024.
+                </p>
+              </div>
+              
+              <div>
+                <h3 className="font-bold text-lg mb-6 text-french-gold font-serif">Contact Us</h3>
+                <ul className="space-y-4 text-blue-100">
+                  <li className="flex items-start group">
+                      <MapPin className="w-5 h-5 mr-3 mt-0.5 group-hover:text-french-red transition-colors" /> 
+                      <span>123 Education Ave,<br/>New York, NY 10001</span>
+                  </li>
+                  <li className="flex items-center group">
+                      <Phone className="w-5 h-5 mr-3 group-hover:text-french-red transition-colors" /> 
+                      <span>+1 (555) 123-4567</span>
+                  </li>
+                  <li className="flex items-center group">
+                      <Mail className="w-5 h-5 mr-3 group-hover:text-french-red transition-colors" /> 
+                      <span>bonjour@frenchcercle.com</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                 <h3 className="font-bold text-lg mb-6 text-french-gold font-serif">Social</h3>
+                 <div className="flex space-x-4">
+                   <a href="#" className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-french-red transition-all duration-300 hover:-translate-y-1"><Globe className="w-5 h-5" /></a>
+                   <a href="#" className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-french-red transition-all duration-300 hover:-translate-y-1"><Users className="w-5 h-5" /></a>
+                 </div>
+                 <div className="mt-8">
+                     <p className="text-blue-300 text-sm mb-2">Subscribe to our newsletter</p>
+                     <div className="flex">
+                         <input type="email" placeholder="Email" className="bg-blue-900/50 border-none rounded-l-md px-4 py-2 w-full text-sm text-white focus:ring-1 focus:ring-french-gold" />
+                         <button className="bg-french-gold text-french-blue px-4 py-2 rounded-r-md text-sm font-bold hover:bg-white transition-colors">OK</button>
+                     </div>
+                 </div>
+              </div>
+            </div>
+            <div className="border-t border-white/10 pt-8 text-center text-blue-300 text-sm flex flex-col md:flex-row justify-between items-center">
+              <p>&copy; {new Date().getFullYear()} FrenchCercle. All rights reserved.</p>
+              <div className="flex space-x-6 mt-4 md:mt-0 items-center">
+                  <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
+                  <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+                  <button onClick={() => setView('ADMIN')} className="hover:text-white transition-colors flex items-center text-blue-400/50 hover:text-blue-200">
+                    <Lock className="w-3 h-3 mr-1" /> Admin Access
+                  </button>
+              </div>
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
   );
 };
