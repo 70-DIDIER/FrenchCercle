@@ -1,11 +1,18 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { PlacementResult } from "../types";
 
-// Initialize the Google GenAI client with the environment API key
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const evaluateFrenchLevel = async (userText: string): Promise<PlacementResult> => {
   try {
+    // Check if API key is present to prevent crash
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      console.warn("Gemini API Key is missing. Returning fallback result.");
+      throw new Error("API Key missing");
+    }
+
+    // Initialize the Google GenAI client only when needed
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+
     // Generate content using the Gemini model
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: "gemini-2.5-flash",
