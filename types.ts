@@ -16,10 +16,18 @@ export interface Testimonial {
   rating: number;
 }
 
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  bio: string;
+  image: string;
+}
+
 export interface PlacementResult {
   estimatedLevel: CEFRLevel;
   feedback: string;
   confidence: number;
 }
 
-export type ViewState = 'HOME' | 'PLACEMENT_TEST' | 'REGISTER';
+export type ViewState = 'HOME' | 'PLACEMENT_TEST' | 'REGISTER' | 'ABOUT';

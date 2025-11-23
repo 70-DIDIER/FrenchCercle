@@ -39,12 +39,12 @@ export const PlacementTest: React.FC<PlacementTestProps> = ({ onComplete }) => {
 
       <div className="bg-white rounded-lg shadow-xl overflow-hidden border border-gray-100 flex flex-col md:flex-row">
         {/* Input Section */}
-        <div className="w-full md:w-1/2 p-8 border-b md:border-b-0 md:border-r border-gray-100">
+        <div className="w-full md:w-1/2 p-8 border-b md:border-b-0 md:border-r border-gray-100 bg-slate-50">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Ecrivez votre texte ici (Write your text here):
           </label>
           <textarea
-            className="w-full h-64 p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-french-blue focus:border-transparent resize-none bg-french-light"
+            className="w-full h-64 p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-french-blue focus:border-transparent resize-none bg-white"
             placeholder="Bonjour, je m'appelle..."
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -65,7 +65,7 @@ export const PlacementTest: React.FC<PlacementTestProps> = ({ onComplete }) => {
         </div>
 
         {/* Result Section */}
-        <div className="w-full md:w-1/2 p-8 bg-slate-50 flex flex-col justify-center items-center">
+        <div className="w-full md:w-1/2 p-8 bg-white flex flex-col justify-center items-center">
           {loading ? (
             <div className="text-center">
               <Loader2 className="w-12 h-12 text-french-blue animate-spin mx-auto mb-4" />
