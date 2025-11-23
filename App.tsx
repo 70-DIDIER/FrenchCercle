@@ -4,8 +4,8 @@ import { SERVICES, LEVELS, TESTIMONIALS, TEAM, MOCK_REGISTRANTS } from './consta
 import { Button } from './components/Button';
 import { PlacementTest } from './components/PlacementTest';
 import { TestimonialCard } from './components/TestimonialCard';
-import { fetchRegistrants, addRegistrantToDb, isSupabaseConfigured } from './services/supabaseClient';
-import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap, Lock, Search, Filter, MoreHorizontal, AlertCircle } from 'lucide-react';
+import { fetchRegistrants, addRegistrantToDb, isSupabaseConfigured, signInAdmin, signOutAdmin, getCurrentUser } from './services/supabaseClient';
+import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap, Lock, Search, Filter, MoreHorizontal, AlertCircle, Download, LogOut } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('HOME');
@@ -20,9 +20,12 @@ const App: React.FC = () => {
 
   // Admin State
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Initial Data Load (Try Supabase, fallback to Mock if config missing or error)
+  // Initial Data Load & Auth Check
   const loadData = async () => {
     setIsLoadingData(true);
     if (isSupabaseConfigured()) {
@@ -42,10 +45,17 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    // Load data only when entering admin view to save resources, 
-    // or if we want to debug. For now, load on mount to be ready.
-    loadData();
-  }, [isAdminAuthenticated]); // Reload when admin logs in to ensure fresh data
+    const checkUser = async () => {
+      if (isSupabaseConfigured()) {
+        const user = await getCurrentUser();
+        if (user) {
+          setIsAdminAuthenticated(true);
+          loadData();
+        }
+      }
+    };
+    checkUser();
+  }, []);
 
   const handlePlacementComplete = (level: string) => {
     if (['A1', 'A2', 'B1', 'B2'].includes(level)) {
@@ -54,14 +64,76 @@ const App: React.FC = () => {
     setView('REGISTER');
   };
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPassword === 'admin123') {
-      setIsAdminAuthenticated(true);
-      loadData(); // Refresh data on login
+    setLoginError('');
+    setIsLoggingIn(true);
+
+    if (isSupabaseConfigured()) {
+      try {
+        await signInAdmin(adminEmail, adminPassword);
+        setIsAdminAuthenticated(true);
+        loadData();
+      } catch (error: any) {
+        setLoginError(error.message || 'Authentication failed');
+      } finally {
+        setIsLoggingIn(false);
+      }
     } else {
-      alert('Incorrect Password');
+      // Fallback local pour démo sans Supabase
+      if (adminPassword === 'admin123') {
+        setIsAdminAuthenticated(true);
+        loadData();
+      } else {
+        setLoginError('Incorrect Password (Demo Mode: admin123)');
+      }
+      setIsLoggingIn(false);
     }
+  };
+
+  const handleAdminLogout = async () => {
+    await signOutAdmin();
+    setIsAdminAuthenticated(false);
+    setAdminEmail('');
+    setAdminPassword('');
+    setView('HOME');
+  };
+
+  const handleExportExcel = () => {
+    // Define headers
+    const headers = ['ID', 'First Name', 'Last Name', 'Email', 'Course', 'Level', 'Type', 'Status', 'Date'];
+    
+    // Map data to CSV format
+    const csvData = registrants.map(r => [
+      r.id,
+      `"${r.firstName}"`, // Quote strings to handle commas inside
+      `"${r.lastName}"`,
+      r.email,
+      `"${r.courseInterest}"`,
+      r.level,
+      r.type,
+      r.status,
+      r.date
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [
+        headers.join(','), 
+        ...csvData.map(row => row.join(','))
+    ].join('\n');
+
+    // Add BOM for Excel to recognize UTF-8 (essential for French accents)
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // Create download link
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `frenchcercle_registrants_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Handle Real Registration
@@ -461,8 +533,25 @@ const App: React.FC = () => {
                         <strong>Demo Mode:</strong> Supabase keys not detected. Data is saved locally in browser.
                     </div>
                 )}
+                {loginError && (
+                    <div className="mt-4 p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200 text-left">
+                        <AlertCircle className="w-4 h-4 inline mr-1 mb-0.5" />
+                        {loginError}
+                    </div>
+                )}
               </div>
               <form onSubmit={handleAdminLogin}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input 
+                    type="email" 
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent"
+                    placeholder="admin@frenchcercle.com"
+                    required
+                  />
+                </div>
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                   <input 
@@ -470,11 +559,11 @@ const App: React.FC = () => {
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent"
-                    placeholder="Enter admin password"
+                    placeholder="Enter password"
+                    required
                   />
-                  <p className="text-xs text-gray-400 mt-2 italic">Hint: admin123</p>
                 </div>
-                <Button type="submit" className="w-full">Access Dashboard</Button>
+                <Button type="submit" className="w-full" isLoading={isLoggingIn}>Login Securely</Button>
                 <button type="button" onClick={() => setView('HOME')} className="w-full mt-4 text-sm text-gray-500 hover:text-french-blue">Return Home</button>
               </form>
             </div>
@@ -486,7 +575,9 @@ const App: React.FC = () => {
                   <p className="text-gray-600">Overview of student registrations</p>
                 </div>
                 <div className="flex space-x-3">
-                   <Button variant="outline" onClick={() => { setIsAdminAuthenticated(false); setView('HOME'); }}>Logout</Button>
+                   <Button variant="outline" onClick={handleAdminLogout} className="flex items-center gap-2">
+                     <LogOut className="w-4 h-4" /> Logout
+                   </Button>
                 </div>
               </div>
 
@@ -525,16 +616,18 @@ const App: React.FC = () => {
 
               {/* Table */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                   <div className="relative">
+                <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
+                   <div className="relative w-full md:w-auto">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input type="text" placeholder="Search students..." className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-french-blue" />
+                      <input type="text" placeholder="Search students..." className="w-full md:w-64 pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-french-blue" />
                    </div>
-                   <div className="flex space-x-2">
-                      <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                   <div className="flex space-x-2 w-full md:w-auto justify-end">
+                      <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
                          <Filter className="w-4 h-4 mr-2" /> Filter
                       </button>
-                      <Button size="sm">Add Student</Button>
+                      <Button onClick={handleExportExcel} variant="secondary" className="flex items-center gap-2" size="sm">
+                         <Download className="w-4 h-4" /> Export Excel
+                      </Button>
                    </div>
                 </div>
                 <div className="overflow-auto relative">

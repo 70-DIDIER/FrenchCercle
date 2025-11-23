@@ -16,6 +16,34 @@ export const isSupabaseConfigured = () => {
   return supabaseUrl !== '' && supabaseAnonKey !== '';
 };
 
+// --- AUTHENTIFICATION ---
+
+export const signInAdmin = async (email: string, password: string) => {
+  if (!isSupabaseConfigured()) throw new Error("Supabase non configuré");
+  
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) throw error;
+  return data.user;
+};
+
+export const signOutAdmin = async () => {
+  if (!isSupabaseConfigured()) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) console.error('Error signing out:', error);
+};
+
+export const getCurrentUser = async () => {
+  if (!isSupabaseConfigured()) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+};
+
+// --- BASE DE DONNEES ---
+
 // Map DB snake_case to App camelCase
 const mapFromDb = (row: any): Registrant => ({
   id: row.id.toString(),
