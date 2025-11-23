@@ -4,7 +4,8 @@ import { SERVICES, LEVELS, TESTIMONIALS, TEAM, MOCK_REGISTRANTS } from './consta
 import { Button } from './components/Button';
 import { PlacementTest } from './components/PlacementTest';
 import { TestimonialCard } from './components/TestimonialCard';
-import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap, Lock, Search, Filter, MoreHorizontal } from 'lucide-react';
+import { fetchRegistrants, addRegistrantToDb, isSupabaseConfigured } from './services/supabaseClient';
+import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap, Lock, Search, Filter, MoreHorizontal, AlertCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('HOME');
@@ -12,13 +13,41 @@ const App: React.FC = () => {
   const [selectedLevel, setSelectedLevel] = useState<CEFRLevel | null>(null);
   const [registrationType, setRegistrationType] = useState<'ZOOM' | 'IN_PERSON'>('ZOOM');
   
+  // Data State
+  const [registrants, setRegistrants] = useState<Registrant[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Admin State
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
-  const [registrants, setRegistrants] = useState<Registrant[]>(MOCK_REGISTRANTS);
+
+  // Initial Data Load (Try Supabase, fallback to Mock if config missing or error)
+  const loadData = async () => {
+    setIsLoadingData(true);
+    if (isSupabaseConfigured()) {
+      try {
+        const data = await fetchRegistrants();
+        setRegistrants(data);
+      } catch (error) {
+        console.error("Failed to load real data, using mock", error);
+        setRegistrants(MOCK_REGISTRANTS);
+      }
+    } else {
+       // Fallback for demo if no API keys
+       const savedData = localStorage.getItem('frenchcercle_data');
+       setRegistrants(savedData ? JSON.parse(savedData) : MOCK_REGISTRANTS);
+    }
+    setIsLoadingData(false);
+  };
+
+  useEffect(() => {
+    // Load data only when entering admin view to save resources, 
+    // or if we want to debug. For now, load on mount to be ready.
+    loadData();
+  }, [isAdminAuthenticated]); // Reload when admin logs in to ensure fresh data
 
   const handlePlacementComplete = (level: string) => {
-    // Cast strict string to CEFRLevel for type safety in a real app, assuming AI returns valid enum
     if (['A1', 'A2', 'B1', 'B2'].includes(level)) {
         setSelectedLevel(level as CEFRLevel);
     }
@@ -29,8 +58,54 @@ const App: React.FC = () => {
     e.preventDefault();
     if (adminPassword === 'admin123') {
       setIsAdminAuthenticated(true);
+      loadData(); // Refresh data on login
     } else {
       alert('Incorrect Password');
+    }
+  };
+
+  // Handle Real Registration
+  const handleRegistrationSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    
+    const partialRegistrant = {
+      firstName: formData.get('firstName') as string,
+      lastName: formData.get('lastName') as string,
+      email: formData.get('email') as string,
+      courseInterest: formData.get('courseInterest') as string,
+      level: (formData.get('level') as string) || 'A1',
+      type: registrationType,
+      date: new Date().toISOString().split('T')[0]
+    };
+
+    try {
+      if (isSupabaseConfigured()) {
+         const newRegistrant = await addRegistrantToDb(partialRegistrant);
+         if (newRegistrant) {
+            setRegistrants(prev => [newRegistrant, ...prev]);
+         }
+      } else {
+        // Fallback to LocalStorage for demo purposes if no Supabase Key
+        const newMockRegistrant: Registrant = {
+            ...partialRegistrant,
+            id: Date.now().toString(),
+            status: 'PENDING'
+        };
+        const updatedList = [newMockRegistrant, ...registrants];
+        setRegistrants(updatedList);
+        localStorage.setItem('frenchcercle_data', JSON.stringify(updatedList));
+      }
+      
+      alert(`Félicitations ${partialRegistrant.firstName}! Your application has been received. We will contact you at ${partialRegistrant.email} shortly.`);
+      setView('HOME');
+
+    } catch (error) {
+      console.error(error);
+      alert("There was an error submitting your registration. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -306,6 +381,7 @@ const App: React.FC = () => {
                         ? 'border-french-blue bg-blue-50/50 text-french-blue shadow-md' 
                         : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
                     }`}
+                    type="button"
                   >
                     <Video className="w-10 h-10 mb-3" />
                     <span className="font-bold">Online (Zoom)</span>
@@ -317,6 +393,7 @@ const App: React.FC = () => {
                         ? 'border-french-blue bg-blue-50/50 text-french-blue shadow-md' 
                         : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
                     }`}
+                    type="button"
                   >
                     <Users className="w-10 h-10 mb-3" />
                     <span className="font-bold">In Person</span>
@@ -324,31 +401,34 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); alert("Merci! We will contact you shortly."); setView('HOME'); }}>
+              <form className="space-y-6" onSubmit={handleRegistrationSubmit}>
+                {/* Hidden input to pass the selected level or default to A1 */}
+                <input type="hidden" name="level" value={selectedLevel || 'A1'} />
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
-                    <input type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="John" />
+                    <input name="firstName" type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="John" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
-                    <input type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="Doe" />
+                    <input name="lastName" type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="Doe" />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                  <input type="email" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="john@example.com" />
+                  <input name="email" type="email" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="john@example.com" />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Interested Course</label>
                   <div className="relative">
-                    <select className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent appearance-none transition-shadow">
-                        <option>General French (A1-B2)</option>
-                        <option>French for Business</option>
-                        <option>French for Conversation</option>
-                        <option>French for Travel</option>
+                    <select name="courseInterest" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent appearance-none transition-shadow">
+                        <option value="General French">General French (A1-B2)</option>
+                        <option value="French for Business">French for Business</option>
+                        <option value="French for Conversation">French for Conversation</option>
+                        <option value="French for Travel">French for Travel</option>
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
                         <ChevronRight className="w-4 h-4 rotate-90" />
@@ -356,7 +436,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full text-lg h-14 shadow-xl shadow-blue-900/10 mt-4" size="lg">Complete Registration</Button>
+                <Button type="submit" className="w-full text-lg h-14 shadow-xl shadow-blue-900/10 mt-4" size="lg" isLoading={isSubmitting}>Complete Registration</Button>
                 <p className="text-xs text-center text-gray-400 mt-6">By registering, you agree to our Terms of Service & Privacy Policy.</p>
               </form>
             </div>
@@ -375,6 +455,12 @@ const App: React.FC = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Admin Portal</h2>
                 <p className="text-gray-500 text-sm">Restricted access for FrenchCercle staff</p>
+                {!isSupabaseConfigured() && (
+                    <div className="mt-4 p-3 bg-amber-50 text-amber-700 text-xs rounded-lg border border-amber-200 text-left">
+                        <AlertCircle className="w-4 h-4 inline mr-1 mb-0.5" />
+                        <strong>Demo Mode:</strong> Supabase keys not detected. Data is saved locally in browser.
+                    </div>
+                )}
               </div>
               <form onSubmit={handleAdminLogin}>
                 <div className="mb-6">
@@ -409,7 +495,7 @@ const App: React.FC = () => {
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                    <div className="flex justify-between items-start mb-4">
                       <div className="p-2 bg-blue-50 rounded-lg"><Users className="w-6 h-6 text-french-blue" /></div>
-                      <span className="text-green-600 text-xs font-bold">+12%</span>
+                      <span className="text-green-600 text-xs font-bold">Live Data</span>
                    </div>
                    <h3 className="text-3xl font-bold text-gray-900">{registrants.length}</h3>
                    <p className="text-sm text-gray-500">Total Students</p>
@@ -451,7 +537,12 @@ const App: React.FC = () => {
                       <Button size="sm">Add Student</Button>
                    </div>
                 </div>
-                <div className="overflow-auto">
+                <div className="overflow-auto relative">
+                  {isLoadingData && (
+                     <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-french-blue"></div>
+                     </div>
+                  )}
                   <table className="w-full text-left">
                     <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider font-semibold sticky top-0">
                       <tr>
@@ -465,46 +556,50 @@ const App: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {registrants.map((student) => (
-                        <tr key={student.id} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <div className="w-8 h-8 rounded-full bg-french-blue/10 text-french-blue flex items-center justify-center font-bold text-xs mr-3">
-                                {student.firstName[0]}{student.lastName[0]}
-                              </div>
-                              <div>
-                                <div className="font-semibold text-gray-900">{student.firstName} {student.lastName}</div>
-                                <div className="text-xs text-gray-500">{student.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{student.courseInterest}</td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                              {student.level}
-                            </span>
-                          </td>
-                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center text-xs font-medium ${student.type === 'ZOOM' ? 'text-blue-600' : 'text-purple-600'}`}>
-                              {student.type === 'ZOOM' ? <Video className="w-3 h-3 mr-1" /> : <Users className="w-3 h-3 mr-1" />}
-                              {student.type === 'ZOOM' ? 'Online' : 'In-Person'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                              student.status === 'ENROLLED' ? 'bg-green-50 text-green-700 border-green-200' : 
-                              student.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                              'bg-blue-50 text-blue-700 border-blue-200'
-                            }`}>
-                              {student.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">{student.date}</td>
-                          <td className="px-6 py-4 text-right">
-                             <button className="text-gray-400 hover:text-french-blue"><MoreHorizontal className="w-5 h-5" /></button>
-                          </td>
-                        </tr>
-                      ))}
+                      {registrants.length === 0 && !isLoadingData ? (
+                          <tr><td colSpan={7} className="text-center py-10 text-gray-500">No registrations found.</td></tr>
+                      ) : (
+                        registrants.map((student) => (
+                            <tr key={student.id} className="hover:bg-blue-50/30 transition-colors">
+                            <td className="px-6 py-4">
+                                <div className="flex items-center">
+                                <div className="w-8 h-8 rounded-full bg-french-blue/10 text-french-blue flex items-center justify-center font-bold text-xs mr-3">
+                                    {student.firstName[0]}{student.lastName[0]}
+                                </div>
+                                <div>
+                                    <div className="font-semibold text-gray-900">{student.firstName} {student.lastName}</div>
+                                    <div className="text-xs text-gray-500">{student.email}</div>
+                                </div>
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700">{student.courseInterest}</td>
+                            <td className="px-6 py-4">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {student.level}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4">
+                                <span className={`inline-flex items-center text-xs font-medium ${student.type === 'ZOOM' ? 'text-blue-600' : 'text-purple-600'}`}>
+                                {student.type === 'ZOOM' ? <Video className="w-3 h-3 mr-1" /> : <Users className="w-3 h-3 mr-1" />}
+                                {student.type === 'ZOOM' ? 'Online' : 'In-Person'}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                student.status === 'ENROLLED' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                student.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                'bg-blue-50 text-blue-700 border-blue-200'
+                                }`}>
+                                {student.status}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-500">{student.date}</td>
+                            <td className="px-6 py-4 text-right">
+                                <button className="text-gray-400 hover:text-french-blue"><MoreHorizontal className="w-5 h-5" /></button>
+                            </td>
+                            </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
