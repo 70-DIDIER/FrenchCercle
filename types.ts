@@ -6,6 +6,7 @@ export interface Service {
   description: string;
   icon: string;
   image: string;
+  price: number; // Base price for the course
 }
 
 export interface Testimonial {
@@ -40,6 +41,8 @@ export interface Registrant {
   type: 'ZOOM' | 'IN_PERSON';
   status: 'PENDING' | 'CONTACTED' | 'ENROLLED';
   date: string;
+  amountPaid?: number;
+  paymentMethod?: 'CARD' | 'PAYPAL';
 }
 
 export type ViewState = 'HOME' | 'PLACEMENT_TEST' | 'REGISTER' | 'ABOUT' | 'ADMIN';

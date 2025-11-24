@@ -6,21 +6,24 @@ export const SERVICES: Service[] = [
     title: 'French for Conversation',
     description: 'Master the art of fluidity. Focus on pronunciation, slang, and cultural nuances to speak like a local.',
     icon: 'MessageCircle',
-    image: 'https://picsum.photos/id/1015/800/600'
+    image: 'https://picsum.photos/id/1015/800/600',
+    price: 299
   },
   {
     id: 'business',
     title: 'French for Business',
     description: 'Professional vocabulary, etiquette, and formal writing for the corporate world. Prepare for CPD certification.',
     icon: 'Briefcase',
-    image: 'https://picsum.photos/id/1076/800/600'
+    image: 'https://picsum.photos/id/1076/800/600',
+    price: 499
   },
   {
     id: 'travel',
     title: 'French for Travel',
     description: 'Essential phrases and cultural tips for your next trip to Paris, Provence, or Quebec.',
     icon: 'Map',
-    image: 'https://picsum.photos/id/1036/800/600'
+    image: 'https://picsum.photos/id/1036/800/600',
+    price: 199
   }
 ];
 
@@ -105,14 +108,16 @@ export const MOCK_REGISTRANTS: Registrant[] = [
     level: 'B1',
     type: 'ZOOM',
     status: 'ENROLLED',
-    date: '2024-03-15'
+    date: '2024-03-15',
+    amountPaid: 499,
+    paymentMethod: 'CARD'
   },
   {
     id: '102',
     firstName: 'Maria',
     lastName: 'Garcia',
     email: 'm.garcia@example.com',
-    courseInterest: 'General French',
+    courseInterest: 'French for Conversation',
     level: 'A1',
     type: 'IN_PERSON',
     status: 'CONTACTED',

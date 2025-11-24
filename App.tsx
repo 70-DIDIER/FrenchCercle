@@ -5,13 +5,21 @@ import { Button } from './components/Button';
 import { PlacementTest } from './components/PlacementTest';
 import { TestimonialCard } from './components/TestimonialCard';
 import { fetchRegistrants, addRegistrantToDb, isSupabaseConfigured, signInAdmin, signOutAdmin, getCurrentUser } from './services/supabaseClient';
-import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap, Lock, Search, Filter, MoreHorizontal, AlertCircle, Download, LogOut } from 'lucide-react';
+import { Menu, X, Globe, MapPin, Phone, Mail, ChevronRight, Video, Users, Check, Award, CheckCircle, GraduationCap, Lock, Search, Filter, MoreHorizontal, AlertCircle, Download, LogOut, CreditCard, Wallet, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('HOME');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Registration State
+  const [registrationStep, setRegistrationStep] = useState<'FORM' | 'PAYMENT'>('FORM');
   const [selectedLevel, setSelectedLevel] = useState<CEFRLevel | null>(null);
   const [registrationType, setRegistrationType] = useState<'ZOOM' | 'IN_PERSON'>('ZOOM');
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(SERVICES[0].title); // Default
+  const [formData, setFormData] = useState<any>({});
+  
+  // Payment State
+  const [paymentMethod, setPaymentMethod] = useState<'CARD' | 'PAYPAL'>('CARD');
   
   // Data State
   const [registrants, setRegistrants] = useState<Registrant[]>([]);
@@ -57,11 +65,22 @@ const App: React.FC = () => {
     checkUser();
   }, []);
 
+  // Pricing Logic
+  const getCoursePrice = () => {
+    const service = SERVICES.find(s => s.title === selectedCourseId) || SERVICES[0];
+    let price = service.price;
+    if (registrationType === 'IN_PERSON') {
+      price += 100; // Surcharge for in-person
+    }
+    return price;
+  };
+
   const handlePlacementComplete = (level: string) => {
     if (['A1', 'A2', 'B1', 'B2'].includes(level)) {
         setSelectedLevel(level as CEFRLevel);
     }
     setView('REGISTER');
+    setRegistrationStep('FORM');
   };
 
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -101,18 +120,19 @@ const App: React.FC = () => {
 
   const handleExportExcel = () => {
     // Define headers
-    const headers = ['ID', 'First Name', 'Last Name', 'Email', 'Course', 'Level', 'Type', 'Status', 'Date'];
+    const headers = ['ID', 'First Name', 'Last Name', 'Email', 'Course', 'Level', 'Type', 'Status', 'Paid', 'Date'];
     
     // Map data to CSV format
     const csvData = registrants.map(r => [
       r.id,
-      `"${r.firstName}"`, // Quote strings to handle commas inside
+      `"${r.firstName}"`,
       `"${r.lastName}"`,
       r.email,
       `"${r.courseInterest}"`,
       r.level,
       r.type,
       r.status,
+      r.amountPaid ? `$${r.amountPaid}` : '-',
       r.date
     ]);
 
@@ -136,46 +156,65 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Handle Real Registration
-  const handleRegistrationSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  // Step 1: Handle Form Submit -> Go to Payment
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    setFormData({
+      firstName: data.get('firstName') as string,
+      lastName: data.get('lastName') as string,
+      email: data.get('email') as string,
+      courseInterest: selectedCourseId,
+      level: (data.get('level') as string) || 'A1',
+      type: registrationType,
+    });
+    setRegistrationStep('PAYMENT');
+  };
+
+  // Step 2: Handle Payment & Final Registration
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const formData = new FormData(e.currentTarget);
     
-    const partialRegistrant = {
-      firstName: formData.get('firstName') as string,
-      lastName: formData.get('lastName') as string,
-      email: formData.get('email') as string,
-      courseInterest: formData.get('courseInterest') as string,
-      level: (formData.get('level') as string) || 'A1',
-      type: registrationType,
-      date: new Date().toISOString().split('T')[0]
+    // Simulate API delay for payment processing
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const finalRegistrant = {
+      ...formData,
+      date: new Date().toISOString().split('T')[0],
+      amountPaid: getCoursePrice(),
+      paymentMethod: paymentMethod
     };
 
     try {
       if (isSupabaseConfigured()) {
-         const newRegistrant = await addRegistrantToDb(partialRegistrant);
+         // Note: In a real app, status would be 'ENROLLED' after payment webhook verification
+         // For this demo, we assume success immediately.
+         const newRegistrant = await addRegistrantToDb({
+             ...finalRegistrant,
+             status: 'ENROLLED' // Immediately enrolled because they paid
+         });
          if (newRegistrant) {
             setRegistrants(prev => [newRegistrant, ...prev]);
          }
       } else {
-        // Fallback to LocalStorage for demo purposes if no Supabase Key
         const newMockRegistrant: Registrant = {
-            ...partialRegistrant,
+            ...finalRegistrant,
             id: Date.now().toString(),
-            status: 'PENDING'
+            status: 'ENROLLED'
         };
         const updatedList = [newMockRegistrant, ...registrants];
         setRegistrants(updatedList);
         localStorage.setItem('frenchcercle_data', JSON.stringify(updatedList));
       }
       
-      alert(`Félicitations ${partialRegistrant.firstName}! Your application has been received. We will contact you at ${partialRegistrant.email} shortly.`);
+      alert(`Paiement Accepté! Welcome to FrenchCercle, ${finalRegistrant.firstName}. A receipt has been sent to ${finalRegistrant.email}.`);
       setView('HOME');
+      setRegistrationStep('FORM'); // Reset
 
     } catch (error) {
       console.error(error);
-      alert("There was an error submitting your registration. Please try again.");
+      alert("There was an error processing your registration. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -220,7 +259,7 @@ const App: React.FC = () => {
               <button onClick={() => scrollToSection('services')} className="text-gray-600 hover:text-french-blue font-medium transition-colors">Services</button>
               <button onClick={() => scrollToSection('testimonials')} className="text-gray-600 hover:text-french-blue font-medium transition-colors">Testimonials</button>
               <Button size="sm" variant="outline" onClick={() => setView('PLACEMENT_TEST')}>Placement Test</Button>
-              <Button size="sm" onClick={() => setView('REGISTER')}>Join Now</Button>
+              <Button size="sm" onClick={() => { setView('REGISTER'); setRegistrationStep('FORM'); }}>Join Now</Button>
             </div>
 
             <div className="md:hidden flex items-center">
@@ -240,7 +279,7 @@ const App: React.FC = () => {
              <button onClick={() => scrollToSection('testimonials')} className="block w-full text-left py-2 font-medium">Testimonials</button>
              <div className="pt-4 flex flex-col space-y-3">
                 <Button variant="outline" className="w-full" onClick={() => { setView('PLACEMENT_TEST'); setMobileMenuOpen(false); }}>Placement Test</Button>
-                <Button className="w-full" onClick={() => { setView('REGISTER'); setMobileMenuOpen(false); }}>Join Now</Button>
+                <Button className="w-full" onClick={() => { setView('REGISTER'); setRegistrationStep('FORM'); setMobileMenuOpen(false); }}>Join Now</Button>
              </div>
           </div>
         )}
@@ -273,7 +312,7 @@ const App: React.FC = () => {
                 Online via Zoom or In-Person at our center.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-                <Button size="lg" onClick={() => setView('REGISTER')} className="shadow-lg shadow-blue-900/50">Start Your Journey</Button>
+                <Button size="lg" onClick={() => { setView('REGISTER'); setRegistrationStep('FORM'); }} className="shadow-lg shadow-blue-900/50">Start Your Journey</Button>
                 <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-french-blue backdrop-blur-sm" onClick={() => setView('PLACEMENT_TEST')}>
                   Take Placement Test
                 </Button>
@@ -312,19 +351,22 @@ const App: React.FC = () => {
                    <h2 className="text-4xl font-serif font-bold text-french-blue mb-3">Tailored Programs</h2>
                    <p className="text-xl text-gray-600">Designed for your specific goals.</p>
                 </div>
-                <Button variant="outline" className="mt-6 md:mt-0" onClick={() => setView('REGISTER')}>View Schedule</Button>
+                <Button variant="outline" className="mt-6 md:mt-0" onClick={() => { setView('REGISTER'); setRegistrationStep('FORM'); }}>View Schedule</Button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                 {SERVICES.map((service) => (
-                  <div key={service.id} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 group">
+                  <div key={service.id} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 group flex flex-col">
                     <div className="h-56 overflow-hidden relative">
                       <div className="absolute inset-0 bg-french-blue/20 group-hover:bg-transparent transition-colors z-10"></div>
                       <img src={service.image} alt={service.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                      <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-french-blue font-bold text-sm shadow-md z-20">
+                        ${service.price}
+                      </div>
                     </div>
-                    <div className="p-8">
+                    <div className="p-8 flex-1 flex flex-col">
                       <h3 className="text-2xl font-bold text-french-blue mb-3">{service.title}</h3>
-                      <p className="text-gray-600 mb-6 leading-relaxed">{service.description}</p>
+                      <p className="text-gray-600 mb-6 leading-relaxed flex-1">{service.description}</p>
                       <ul className="space-y-3 mb-8">
                         <li className="flex items-center text-sm text-gray-600">
                           <Check className="w-5 h-5 text-green-500 mr-3" /> Certified Instructors
@@ -334,7 +376,11 @@ const App: React.FC = () => {
                         </li>
                       </ul>
                       <button 
-                        onClick={() => setView('REGISTER')}
+                        onClick={() => { 
+                            setSelectedCourseId(service.title);
+                            setView('REGISTER'); 
+                            setRegistrationStep('FORM');
+                        }}
                         className="text-french-red font-bold text-sm hover:text-french-blue transition-colors flex items-center uppercase tracking-wide"
                       >
                         Enroll Now <ChevronRight className="w-4 h-4 ml-1" />
@@ -359,7 +405,7 @@ const App: React.FC = () => {
                   </p>
                 </div>
                 <div className="relative z-10">
-                    <Button variant="secondary" size="lg" onClick={() => setView('REGISTER')}>Get Certified</Button>
+                    <Button variant="secondary" size="lg" onClick={() => { setView('REGISTER'); setRegistrationStep('FORM'); }}>Get Certified</Button>
                 </div>
               </div>
             </div>
@@ -409,7 +455,7 @@ const App: React.FC = () => {
 
                 <div className="mt-20 text-center">
                     <h3 className="text-2xl font-serif font-bold text-gray-800 mb-6">Ready to learn with us?</h3>
-                    <Button size="lg" onClick={() => setView('REGISTER')}>Join the Class</Button>
+                    <Button size="lg" onClick={() => { setView('REGISTER'); setRegistrationStep('FORM'); }}>Join the Class</Button>
                 </div>
             </div>
         </div>
@@ -427,91 +473,215 @@ const App: React.FC = () => {
             <div className="bg-french-blue p-10 text-white text-center relative overflow-hidden">
               <div className="absolute inset-0 bg-black/10"></div>
               <div className="relative z-10">
-                <h2 className="text-3xl font-serif font-bold mb-3">Inscription</h2>
-                <p className="text-blue-100">Begin your journey with FrenchCercle</p>
+                <h2 className="text-3xl font-serif font-bold mb-3">
+                    {registrationStep === 'FORM' ? 'Inscription' : 'Secure Payment'}
+                </h2>
+                <p className="text-blue-100">
+                    {registrationStep === 'FORM' ? 'Begin your journey with FrenchCercle' : 'Complete your enrollment'}
+                </p>
               </div>
             </div>
             
-            <div className="p-8 md:p-12">
-              {selectedLevel && (
-                <div className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-xl mb-8 flex items-start shadow-sm">
-                  <CheckCircle className="w-6 h-6 mr-4 mt-0.5 flex-shrink-0 text-green-600" />
-                  <div>
-                    <p className="font-bold text-lg mb-1">Placement Result: Level {selectedLevel}</p>
-                    <p className="text-green-700">We have pre-selected the {selectedLevel} courses for you based on your evaluation.</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="mb-8">
-                <label className="block text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Choose your learning mode</label>
-                <div className="grid grid-cols-2 gap-6">
-                  <button
-                    onClick={() => setRegistrationType('ZOOM')}
-                    className={`p-6 rounded-xl border-2 flex flex-col items-center justify-center transition-all duration-200 ${
-                      registrationType === 'ZOOM' 
-                        ? 'border-french-blue bg-blue-50/50 text-french-blue shadow-md' 
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
-                    }`}
-                    type="button"
-                  >
-                    <Video className="w-10 h-10 mb-3" />
-                    <span className="font-bold">Online (Zoom)</span>
-                  </button>
-                  <button
-                    onClick={() => setRegistrationType('IN_PERSON')}
-                    className={`p-6 rounded-xl border-2 flex flex-col items-center justify-center transition-all duration-200 ${
-                      registrationType === 'IN_PERSON' 
-                        ? 'border-french-blue bg-blue-50/50 text-french-blue shadow-md' 
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
-                    }`}
-                    type="button"
-                  >
-                    <Users className="w-10 h-10 mb-3" />
-                    <span className="font-bold">In Person</span>
-                  </button>
-                </div>
-              </div>
-
-              <form className="space-y-6" onSubmit={handleRegistrationSubmit}>
-                {/* Hidden input to pass the selected level or default to A1 */}
-                <input type="hidden" name="level" value={selectedLevel || 'A1'} />
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
-                    <input name="firstName" type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="John" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
-                    <input name="lastName" type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="Doe" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                  <input name="email" type="email" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="john@example.com" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Interested Course</label>
-                  <div className="relative">
-                    <select name="courseInterest" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent appearance-none transition-shadow">
-                        <option value="General French">General French (A1-B2)</option>
-                        <option value="French for Business">French for Business</option>
-                        <option value="French for Conversation">French for Conversation</option>
-                        <option value="French for Travel">French for Travel</option>
-                    </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
-                        <ChevronRight className="w-4 h-4 rotate-90" />
+            {registrationStep === 'FORM' && (
+                <div className="p-8 md:p-12">
+                {selectedLevel && (
+                    <div className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-xl mb-8 flex items-start shadow-sm">
+                    <CheckCircle className="w-6 h-6 mr-4 mt-0.5 flex-shrink-0 text-green-600" />
+                    <div>
+                        <p className="font-bold text-lg mb-1">Placement Result: Level {selectedLevel}</p>
+                        <p className="text-green-700">We have pre-selected the {selectedLevel} courses for you based on your evaluation.</p>
                     </div>
-                  </div>
+                    </div>
+                )}
+
+                <div className="mb-8">
+                    <label className="block text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Choose your learning mode</label>
+                    <div className="grid grid-cols-2 gap-6">
+                    <button
+                        onClick={() => setRegistrationType('ZOOM')}
+                        className={`p-6 rounded-xl border-2 flex flex-col items-center justify-center transition-all duration-200 ${
+                        registrationType === 'ZOOM' 
+                            ? 'border-french-blue bg-blue-50/50 text-french-blue shadow-md' 
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
+                        }`}
+                        type="button"
+                    >
+                        <div className="flex justify-between w-full mb-2">
+                            <Video className="w-8 h-8" />
+                            <span className="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-500">Base Price</span>
+                        </div>
+                        <span className="font-bold">Online (Zoom)</span>
+                    </button>
+                    <button
+                        onClick={() => setRegistrationType('IN_PERSON')}
+                        className={`p-6 rounded-xl border-2 flex flex-col items-center justify-center transition-all duration-200 ${
+                        registrationType === 'IN_PERSON' 
+                            ? 'border-french-blue bg-blue-50/50 text-french-blue shadow-md' 
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
+                        }`}
+                        type="button"
+                    >
+                        <div className="flex justify-between w-full mb-2">
+                            <Users className="w-8 h-8" />
+                            <span className="text-xs bg-french-gold/20 text-french-blue border border-french-gold/30 px-2 py-1 rounded font-semibold">+$100</span>
+                        </div>
+                        <span className="font-bold">In Person</span>
+                    </button>
+                    </div>
                 </div>
 
-                <Button type="submit" className="w-full text-lg h-14 shadow-xl shadow-blue-900/10 mt-4" size="lg" isLoading={isSubmitting}>Complete Registration</Button>
-                <p className="text-xs text-center text-gray-400 mt-6">By registering, you agree to our Terms of Service & Privacy Policy.</p>
-              </form>
-            </div>
+                <form className="space-y-6" onSubmit={handleFormSubmit}>
+                    <input type="hidden" name="level" value={selectedLevel || 'A1'} />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                        <input name="firstName" defaultValue={formData.firstName} type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="John" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                        <input name="lastName" defaultValue={formData.lastName} type="text" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="Doe" />
+                    </div>
+                    </div>
+
+                    <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                    <input name="email" defaultValue={formData.email} type="email" className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent transition-shadow" required placeholder="john@example.com" />
+                    </div>
+
+                    <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Course</label>
+                    <div className="relative">
+                        <select 
+                            name="courseInterest" 
+                            value={selectedCourseId}
+                            onChange={(e) => setSelectedCourseId(e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-200 bg-white rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent appearance-none transition-shadow"
+                        >
+                            {SERVICES.map(s => (
+                                <option key={s.id} value={s.title}>{s.title} (${s.price})</option>
+                            ))}
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                            <ChevronRight className="w-4 h-4 rotate-90" />
+                        </div>
+                    </div>
+                    </div>
+
+                    {/* Price Preview */}
+                    <div className="bg-slate-50 p-4 rounded-lg flex justify-between items-center border border-gray-200">
+                        <span className="text-gray-600 font-medium">Total Estimated:</span>
+                        <span className="text-xl font-bold text-french-blue">${getCoursePrice()}</span>
+                    </div>
+
+                    <Button type="submit" className="w-full text-lg h-14 shadow-xl shadow-blue-900/10 mt-4" size="lg">
+                         Proceed to Payment <ChevronRight className="w-5 h-5 ml-2" />
+                    </Button>
+                    <p className="text-xs text-center text-gray-400 mt-6">You will be charged on the next step.</p>
+                </form>
+                </div>
+            )}
+
+            {registrationStep === 'PAYMENT' && (
+                <div className="p-8 md:p-12">
+                    <button 
+                        onClick={() => setRegistrationStep('FORM')} 
+                        className="flex items-center text-gray-400 hover:text-french-blue mb-6 text-sm transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4 mr-1" /> Back to details
+                    </button>
+
+                    {/* Order Summary */}
+                    <div className="bg-slate-50 rounded-xl p-6 mb-8 border border-gray-200">
+                        <h3 className="font-serif font-bold text-gray-900 mb-4 border-b border-gray-200 pb-2">Order Summary</h3>
+                        <div className="flex justify-between mb-2 text-sm text-gray-600">
+                            <span>{selectedCourseId}</span>
+                            <span>${SERVICES.find(s => s.title === selectedCourseId)?.price}</span>
+                        </div>
+                        {registrationType === 'IN_PERSON' && (
+                            <div className="flex justify-between mb-2 text-sm text-gray-600">
+                                <span>In-Person Supplement</span>
+                                <span>$100</span>
+                            </div>
+                        )}
+                         <div className="flex justify-between mt-4 pt-4 border-t border-gray-200 text-lg font-bold text-french-blue">
+                            <span>Total</span>
+                            <span>${getCoursePrice()}</span>
+                        </div>
+                    </div>
+
+                    {/* Payment Method Tabs */}
+                    <div className="flex space-x-4 mb-8">
+                        <button
+                            onClick={() => setPaymentMethod('CARD')}
+                            className={`flex-1 py-3 px-4 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                paymentMethod === 'CARD' ? 'border-french-blue bg-blue-50 text-french-blue' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                            }`}
+                        >
+                            <CreditCard className="w-5 h-5 mr-2" />
+                            <span className="font-semibold">Card</span>
+                        </button>
+                         <button
+                            onClick={() => setPaymentMethod('PAYPAL')}
+                            className={`flex-1 py-3 px-4 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                paymentMethod === 'PAYPAL' ? 'border-[#0070BA] bg-blue-50 text-[#0070BA]' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                            }`}
+                        >
+                            <span className="font-bold italic mr-1">Pay</span><span className="font-bold italic text-sky-600">Pal</span>
+                        </button>
+                    </div>
+
+                    {/* Form */}
+                    <form onSubmit={handlePaymentSubmit}>
+                        {paymentMethod === 'CARD' ? (
+                            <div className="space-y-4 animate-fade-in">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Card Number</label>
+                                    <div className="relative">
+                                        <input type="text" placeholder="0000 0000 0000 0000" className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent" required />
+                                        <div className="absolute right-4 top-3 flex space-x-2">
+                                            <div className="w-8 h-5 bg-gray-200 rounded"></div>
+                                            <div className="w-8 h-5 bg-gray-200 rounded"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expiry Date</label>
+                                        <input type="text" placeholder="MM/YY" className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent" required />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">CVC</label>
+                                        <input type="text" placeholder="123" className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent" required />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cardholder Name</label>
+                                    <input type="text" placeholder="John Doe" className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-french-blue focus:border-transparent" required />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 animate-fade-in bg-slate-50 rounded-lg border border-dashed border-gray-300">
+                                <p className="text-gray-600 mb-4">You will be redirected to PayPal to complete your purchase securely.</p>
+                            </div>
+                        )}
+                        
+                        <div className="mt-8">
+                             <Button type="submit" className={`w-full text-lg h-14 shadow-xl ${paymentMethod === 'PAYPAL' ? 'bg-[#FFC439] hover:bg-[#F4BB35] text-blue-900' : ''}`} size="lg" isLoading={isSubmitting}>
+                                {paymentMethod === 'PAYPAL' ? (
+                                    <span className="font-bold italic">Pay with PayPal</span>
+                                ) : (
+                                    <span>Pay ${getCoursePrice()}</span>
+                                )}
+                            </Button>
+                            <div className="flex items-center justify-center mt-4 text-xs text-gray-400">
+                                <ShieldCheck className="w-4 h-4 mr-1 text-green-500" />
+                                <span>SSL Encrypted Payment. Your data is secure.</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            )}
           </div>
         </div>
       )}
@@ -607,10 +777,12 @@ const App: React.FC = () => {
                 </div>
                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-red-50 rounded-lg"><Mail className="w-6 h-6 text-french-red" /></div>
+                      <div className="p-2 bg-green-50 rounded-lg"><Wallet className="w-6 h-6 text-green-600" /></div>
                    </div>
-                   <h3 className="text-3xl font-bold text-gray-900">{registrants.filter(r => r.status === 'PENDING').length}</h3>
-                   <p className="text-sm text-gray-500">Pending Actions</p>
+                   <h3 className="text-3xl font-bold text-gray-900">
+                    ${registrants.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0).toLocaleString()}
+                   </h3>
+                   <p className="text-sm text-gray-500">Total Revenue</p>
                 </div>
               </div>
 
@@ -644,13 +816,13 @@ const App: React.FC = () => {
                         <th className="px-6 py-4">Level</th>
                         <th className="px-6 py-4">Type</th>
                         <th className="px-6 py-4">Status</th>
+                         <th className="px-6 py-4">Paid</th>
                         <th className="px-6 py-4">Date</th>
-                        <th className="px-6 py-4"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {registrants.length === 0 && !isLoadingData ? (
-                          <tr><td colSpan={7} className="text-center py-10 text-gray-500">No registrations found.</td></tr>
+                          <tr><td colSpan={8} className="text-center py-10 text-gray-500">No registrations found.</td></tr>
                       ) : (
                         registrants.map((student) => (
                             <tr key={student.id} className="hover:bg-blue-50/30 transition-colors">
@@ -686,10 +858,14 @@ const App: React.FC = () => {
                                 {student.status}
                                 </span>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-500">{student.date}</td>
-                            <td className="px-6 py-4 text-right">
-                                <button className="text-gray-400 hover:text-french-blue"><MoreHorizontal className="w-5 h-5" /></button>
+                             <td className="px-6 py-4">
+                                {student.amountPaid ? (
+                                    <span className="text-green-600 font-bold text-xs">${student.amountPaid}</span>
+                                ) : (
+                                    <span className="text-gray-400 text-xs">-</span>
+                                )}
                             </td>
+                            <td className="px-6 py-4 text-sm text-gray-500">{student.date}</td>
                             </tr>
                         ))
                       )}
@@ -703,7 +879,7 @@ const App: React.FC = () => {
       )}
 
       {/* Footer */}
-      {view !== 'ADMIN' && (
+      {!isAdminAuthenticated && view !== 'ADMIN' && (
         <footer className="bg-french-blue text-white py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
